@@ -1,16 +1,122 @@
 import os
-from typing import Optional, List
+from functools import partial
+from typing import Callable, Optional, List
 
 import anndata as ad
 import numpy as np
 import requests
 
-from zytome.portal._interfaces.dataset import DatasetInterface
+from zytome.portal._interfaces.dataset import DatasetInterface, Handler
+
+Filter = Callable[[ad.AnnData], ad.AnnData]
+class Dataset(DatasetInterface):
+    def __init__(self, adata: ad.AnnData, dataset: DatasetInterface, filters: List[Filter]):
+        self._adata = adata 
+        self._dataset = dataset 
+        self._filters = filters 
+        self._raw = None 
+        self._raw_normalized_by_feature_length = None
+    
+    @property
+    def short_name(self) -> str:
+        return self._dataset.short_name
+    @property
+    def long_name(self) -> str:
+        return self._dataset.long_name
+
+    @property
+    def tissues(self) -> list[str]:
+        return self._dataset.tissues
+
+    @property
+    def diseases(self) -> list[str]:
+        return self._dataset.diseases
+
+    @property
+    def assays(self) -> list[str]:
+        return self._dataset.assays
+
+    @property
+    def organism(self) -> str:
+        return self._dataset.organism
+
+    @property
+    def num_cells(self) -> int:
+        return self._dataset.num_cells
+
+    @property
+    def download_link(self) -> str:
+        return self._dataset.download_link
+    
+    @property
+    def handler(self) -> Handler:
+        return self._dataset.handler
+
+    @property 
+    def adata(self) -> ad.AnnData:
+        self._apply_filters()
+        return self._adata
+
+    def _apply_filters(self):
+        adata = self._adata
+
+        for filter_fn in self._filters:
+            adata = filter_fn(adata)
+
+        self._filters = []
+        self._adata = adata 
+
+    @property
+    def raw(self) -> np.ndarray: 
+        return self.adata.X.toarray()
+
+    @property 
+    def raw_normalized_by_feature_length(self) -> np.ndarray:
+        return self.raw / self.feature_lengths[None, :]
+
+    @property
+    def feature_lengths(self): 
+        return np.array(self.adata.var["feature_length"].values)
+
+    @property
+    def feature_names(self):
+        return list(self.adata.var["feature_name"].index)
+
+    @property
+    def feature_name_name(self):
+        """Returns the name of the index column of the feature name series. Example: 'ensembl_id'. This is useful in identifying gene name convetion"""
+        return self.adata.var["feature_name"].index.name
+
+    @property
+    def feature_types(self):
+        return self.adata.var["feature_type"]
+
+    def filter(self, filter_fn: Filter) -> "Dataset":
+        return Dataset(
+                self._adata, self._dataset, self._filters + [filter_fn]
+                )
+
+
+def load_data_from_portal(dataset: DatasetInterface):
+    adata = read_raw_h5ad(dataset)
+    adata.X = adata.raw.X # converts X back to the raw
+    return Dataset(adata, dataset, [])
+
+def make_filter(assays: Optional[List[str]] = None,
+    tissues: Optional[List[str]] = None,
+    feature_types: Optional[List[str]] = None,
+    max_cells: Optional[int] = None,
+    rng: Optional[np.random.Generator] = None,
+                ):
+
+    return partial(filter_adata, assays=assays, tissues=tissues, feature_types=feature_types, max_cells=max_cells, rng=rng)
+
 
 
 def get_zytome_dir() -> str:
     """This is where the datasets are stored"""
     return os.getenv("Z_ZYTOME_DIR", "./.zytome")
+
 
 
 def read_raw_h5ad(dataset: DatasetInterface) -> ad.AnnData:
