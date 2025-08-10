@@ -1,4 +1,5 @@
 import os
+from typing import Optional, List
 
 import anndata as ad
 import numpy as np
@@ -57,6 +58,7 @@ def read_raw_h5ad(dataset: DatasetInterface) -> ad.AnnData:
 
 def filter_adata(
     adata: ad.AnnData,
+    *,
     assays: Optional[List[str]] = None,
     tissues: Optional[List[str]] = None,
     feature_types: Optional[List[str]] = None,
