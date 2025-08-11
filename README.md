@@ -45,3 +45,9 @@ gene_names = dX.feature_names
 # this will give you the convention name like ensembl_id
 gene_name_convention = dX.feature_name_name
 ```
+
+## Installation
+
+```bash
+pip install --upgrade z-zytome
+```
