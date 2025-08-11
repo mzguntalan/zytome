@@ -30,7 +30,13 @@ tissues = dX.tissues
 # .raw_normalized_by_feature_length gives you a numpy array
 # .raw is also available (raw counts)
 cells_by_types = [
-    dX.filter(explorer.make_filter(max_cells=5_00, tissues=[tissue])).raw_normalized_by_feature_length for tissue in tissues
+    dX.filter(
+        explorer.make_filter(
+            max_cells=5_00,
+            tissues=[tissue]
+            )
+    ).raw_normalized_by_feature_length
+    for tissue in tissues
 ]
 
 # these will give you gene names
