@@ -13,7 +13,6 @@ setup(
     install_requires=["anndata>=0.12.1", "numpy>=2.2.6"],
     classifiers=[
         "Development Status :: 3 - Alpha",
-        "Environment :: CPU",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
