@@ -1,0 +1,19 @@
+[tool.pyright]
+include = ["zytome"]
+exclude = ["venv", ".venv", "**/__pycache__"]
+pythonVersion = "3.11"
+pythonPlatform = "Linux"
+typeCheckingMode = "strict"
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportMissingModuleSource = false
+reportOptionalMemberAccess = false
+reportPrivateImportUsage = false
+# Ignore issues from external libraries with incomplete type stubs
+reportUnknownVariableType = "warning"
+reportUnknownMemberType = "warning"
+reportUnknownArgumentType = "warning"
+reportUnknownParameterType = "warning"
+reportUnknownReturnType = "warning"
+reportGeneralTypeIssues = "error"
+reportReturnType = "error"

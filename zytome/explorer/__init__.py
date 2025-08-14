@@ -1,16 +1,17 @@
 import os
 from functools import partial
-from typing import Callable, Optional, List
+from typing import Callable, Optional, Any
 
 import anndata as ad
 import numpy as np
 import requests
+from scipy import sparse
 
 from zytome.portal._interfaces.dataset import DatasetInterface, Handler
 
 Filter = Callable[[ad.AnnData], ad.AnnData]
 class Dataset(DatasetInterface):
-    def __init__(self, adata: ad.AnnData, dataset: DatasetInterface, filters: List[Filter]):
+    def __init__(self, adata: ad.AnnData, dataset: DatasetInterface, filters: list[Filter]):
         self._adata = adata 
         self._dataset = dataset 
         self._filters = filters 
@@ -57,7 +58,7 @@ class Dataset(DatasetInterface):
         self._apply_filters()
         return self._adata
 
-    def _apply_filters(self):
+    def _apply_filters(self) -> None:
         adata = self._adata
 
         for filter_fn in self._filters:
@@ -67,28 +68,32 @@ class Dataset(DatasetInterface):
         self._adata = adata 
 
     @property
-    def raw(self) -> np.ndarray: 
-        return self.adata.X.toarray()
+    def raw(self) -> np.ndarray:
+        X = self.adata.X
+        if sparse.issparse(X):
+            return X.toarray()  # type: ignore
+        return np.asarray(X)
 
     @property 
     def raw_normalized_by_feature_length(self) -> np.ndarray:
         return self.raw / self.feature_lengths[None, :]
 
     @property
-    def feature_lengths(self): 
-        return np.array(self.adata.var["feature_length"].values)
+    def feature_lengths(self) -> np.ndarray:
+        return np.asarray(self.adata.var["feature_length"].values)
 
     @property
-    def feature_names(self):
+    def feature_names(self) -> list[str]:
         return list(self.adata.var["feature_name"].index)
 
     @property
-    def feature_name_name(self):
-        """Returns the name of the index column of the feature name series. Example: 'ensembl_id'. This is useful in identifying gene name convetion"""
-        return self.adata.var["feature_name"].index.name
+    def feature_name_name(self) -> Optional[str]:
+        """Returns the name of the index column of the feature name series. Example: 'ensembl_id'. This is useful in identifying gene name convention"""
+        name = self.adata.var["feature_name"].index.name
+        return str(name) if name is not None else None
 
     @property
-    def feature_types(self):
+    def feature_types(self) -> Any:
         return self.adata.var["feature_type"]
 
     def filter(self, filter_fn: Filter) -> "Dataset":
@@ -97,17 +102,18 @@ class Dataset(DatasetInterface):
                 )
 
 
-def load_data_from_portal(dataset: DatasetInterface):
+def load_data_from_portal(dataset: DatasetInterface) -> Dataset:
     adata = read_raw_h5ad(dataset)
     adata.X = adata.raw.X # converts X back to the raw
     return Dataset(adata, dataset, [])
 
-def make_filter(assays: Optional[List[str]] = None,
-    tissues: Optional[List[str]] = None,
-    feature_types: Optional[List[str]] = None,
+def make_filter(
+    assays: Optional[list[str]] = None,
+    tissues: Optional[list[str]] = None,
+    feature_types: Optional[list[str]] = None,
     max_cells: Optional[int] = None,
     rng: Optional[np.random.Generator] = None,
-                ):
+) -> Filter:
 
     return partial(filter_adata, assays=assays, tissues=tissues, feature_types=feature_types, max_cells=max_cells, rng=rng)
 
@@ -165,9 +171,9 @@ def read_raw_h5ad(dataset: DatasetInterface) -> ad.AnnData:
 def filter_adata(
     adata: ad.AnnData,
     *,
-    assays: Optional[List[str]] = None,
-    tissues: Optional[List[str]] = None,
-    feature_types: Optional[List[str]] = None,
+    assays: Optional[list[str]] = None,
+    tissues: Optional[list[str]] = None,
+    feature_types: Optional[list[str]] = None,
     max_cells: Optional[int] = None,
     rng: Optional[np.random.Generator] = None,
 ) -> ad.AnnData:
@@ -201,11 +207,11 @@ def filter_adata(
     mask_genes = np.ones(adata.n_vars, dtype=bool)
 
     if assays:
-        mask_cells &= adata.obs["assay"].isin(assays)
+        mask_cells &= adata.obs["assay"].isin(assays).values  # type: ignore
     if tissues:
-        mask_cells &= adata.obs["tissue"].isin(tissues)
+        mask_cells &= adata.obs["tissue"].isin(tissues).values  # type: ignore
     if feature_types:
-        mask_genes &= adata.var["feature_type"].isin(feature_types)
+        mask_genes &= adata.var["feature_type"].isin(feature_types).values  # type: ignore
 
     adata_filtered = adata[mask_cells, mask_genes]
 
