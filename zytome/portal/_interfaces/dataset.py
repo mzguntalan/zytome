@@ -1,5 +1,4 @@
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import Literal
 
 Handler = Literal[
@@ -53,7 +52,8 @@ class DatasetInterface(ABC):
 
     @property
     @abstractmethod
-    def download_link(self) -> str: ...
+    def download_link(self) -> str:
+        ...
 
     @property
     @abstractmethod
