@@ -43,4 +43,8 @@ class Dataset(GTExBulkInterface):
 
     @property
     def metadata_link(self) -> str:
-        return "https://storage.googleapis.com/adult-gtex/annotations/v10/metadata-files/GTEx_Analysis_v10_Annotations_SampleAttributesDD.xlsx"
+        return "https://storage.googleapis.com/adult-gtex/annotations/v10/metadata-files/GTEx_Analysis_v10_Annotations_SampleAttributesDS.txt"
+
+    @property
+    def gencode_link(self) -> str:
+        return "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_40/gencode.v40.annotation.gtf.gz"

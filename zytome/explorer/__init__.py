@@ -144,12 +144,15 @@ def get_zytome_dir() -> str:
 
 
 def read_gct_gz(dataset: GTExBulkInterface) -> ad.AnnData:
+    import gzip
+
     assert dataset.handler == "GTEx"
 
     dir_name = dataset.long_name
     short_name = "dataset"
     download_link_gct_gz = dataset.download_link
     metadata_link = dataset.metadata_link
+    gencode_link = dataset.gencode_link  # new field for GENCODE GTF
 
     base_dir = get_zytome_dir()
     dataset_dir = os.path.join(base_dir, dir_name)
@@ -158,9 +161,7 @@ def read_gct_gz(dataset: GTExBulkInterface) -> ad.AnnData:
     # --- GCT ---
     gct_path = os.path.join(dataset_dir, f"{short_name}.gct.gz")
     if not os.path.exists(gct_path):
-        logger.info(
-            f"[INFO] GCT file not found, downloading from {download_link_gct_gz}..."
-        )
+        logger.info("GCT file not found, downloading from %s...", download_link_gct_gz)
         download_with_progress(download_link_gct_gz, gct_path)
 
     # Read GCT (skip first 2 lines: version + dimensions)
@@ -173,28 +174,74 @@ def read_gct_gz(dataset: GTExBulkInterface) -> ad.AnnData:
     meta_path = os.path.join(dataset_dir, f"{short_name}_metadata.txt")
     if not os.path.exists(meta_path):
         logger.info("Metadata not found, downloading from %s...", metadata_link)
-    download_with_progress(metadata_link, meta_path)
+        download_with_progress(metadata_link, meta_path)
 
-    # GTEx metadata is multi-column TSV, not just 2-column key/value
-    meta = pd.read_csv(meta_path, sep="\t", encoding="latin1")
-
-    # Use GTEx sample IDs as index (usually "SAMPID")
+    # Parse metadata (skip comment lines)
+    meta = pd.read_csv(meta_path, sep="\t", encoding="latin1", comment="#")
     if "SAMPID" in meta.columns:
         meta = meta.set_index("SAMPID")
-
-    # Align samples in expression with metadata
     obs = meta.loc[expr.index].copy()
 
+    # --- AnnData object ---
     adata = ad.AnnData(
         X=expr.values,
         obs=obs,
         var=pd.DataFrame(
-            {"ensembl_id": gene_ids, "gene_symbol": gene_symbols}, index=gene_ids
+            {"ensembl_id": gene_ids, "gene_symbol": gene_symbols},
+            index=gene_ids,
         ),
     )
 
     if "SMTSD" in obs.columns:
         adata.obs["tissue"] = obs["SMTSD"]
+
+    # --- GENCODE annotations ---
+    gtf_path = os.path.join(dataset_dir, os.path.basename(gencode_link))
+    if not os.path.exists(gtf_path):
+        logger.info("GENCODE GTF not found, downloading from %s...", gencode_link)
+        download_with_progress(gencode_link, gtf_path)
+
+    # Parse GTF for gene_type and feature_length
+    gene_info = []
+    open_func = gzip.open if gtf_path.endswith(".gz") else open
+    with open_func(gtf_path, "rt", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            parts = line.strip().split("\t")
+            if parts[2] != "gene":
+                continue
+            chrom, start, end, attr_str = (
+                parts[0],
+                int(parts[3]),
+                int(parts[4]),
+                parts[8],
+            )
+            attrs = dict(
+                item.strip().replace('"', "").split(" ")
+                for item in attr_str.strip().split(";")
+                if item
+            )
+            gene_info.append(
+                {
+                    "ensembl_id": attrs["gene_id"].split(".")[0],
+                    "feature_type": attrs.get("gene_type"),
+                    "feature_length": end - start + 1,
+                }
+            )
+    gtf_df = pd.DataFrame(gene_info).set_index("ensembl_id")
+
+    # Merge GTF info into adata.var
+    adata.var.index = adata.var["ensembl_id"].str.replace(r"\..*", "", regex=True)
+
+    gtf_df.index = gtf_df.index.str.replace(r"\..", "", regex=True)
+
+    gtf_df = gtf_df.groupby(gtf_df.index).agg(
+        {"feature_type": "first", "feature_length": "first"}
+    )
+
+    adata.var["feature_type"] = gtf_df["feature_type"].reindex(adata.var.index)
+    adata.var["feature_length"] = gtf_df["feature_length"].reindex(adata.var.index)
 
     return adata
 
