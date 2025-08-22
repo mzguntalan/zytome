@@ -1,3 +1,4 @@
+import logging
 import os
 from functools import partial
 from typing import Callable
@@ -6,11 +7,16 @@ from typing import Optional
 
 import anndata as ad
 import numpy as np
+import pandas as pd
 import requests
 
+from zytome.explorer.download import download_with_progress
 from zytome.portal._interfaces.dataset import DatasetInterface
 from zytome.portal._interfaces.dataset import Handler
 from zytome.portal.gtex.base import GTExBulkInterface
+
+
+logger = logging.getLogger(__name__)
 
 Filter = Callable[[ad.AnnData], ad.AnnData]
 
@@ -105,9 +111,13 @@ class Dataset(DatasetInterface):
 
 
 def load_data_from_portal(dataset: DatasetInterface):
-    adata = read_raw_h5ad(dataset)
-    adata.X = adata.raw.X  # converts X back to the raw
-    return Dataset(adata, dataset, [])
+    if dataset.handler == "CellXGene":
+        adata = read_raw_h5ad(dataset)
+        adata.X = adata.raw.X  # converts X back to the raw
+        return Dataset(adata, dataset, [])
+    elif dataset.handler == "GTEx":
+        adata = read_gct_gz(dataset)
+        return Dataset(adata, dataset, [])
 
 
 def make_filter(
@@ -135,10 +145,58 @@ def get_zytome_dir() -> str:
 
 def read_gct_gz(dataset: GTExBulkInterface) -> ad.AnnData:
     assert dataset.handler == "GTEx"
+
     dir_name = dataset.long_name
     short_name = "dataset"
     download_link_gct_gz = dataset.download_link
     metadata_link = dataset.metadata_link
+
+    base_dir = get_zytome_dir()
+    dataset_dir = os.path.join(base_dir, dir_name)
+    os.makedirs(dataset_dir, exist_ok=True)
+
+    # --- GCT ---
+    gct_path = os.path.join(dataset_dir, f"{short_name}.gct.gz")
+    if not os.path.exists(gct_path):
+        logger.info(
+            f"[INFO] GCT file not found, downloading from {download_link_gct_gz}..."
+        )
+        download_with_progress(download_link_gct_gz, gct_path)
+
+    # Read GCT (skip first 2 lines: version + dimensions)
+    df = pd.read_csv(gct_path, sep="\t", skiprows=2)
+    gene_ids = df["Name"].values
+    gene_symbols = df["Description"].values
+    expr = df.drop(columns=["Name", "Description"]).T  # transpose: samples × genes
+
+    # --- Metadata ---
+    meta_path = os.path.join(dataset_dir, f"{short_name}_metadata.txt")
+    if not os.path.exists(meta_path):
+        logger.info("Metadata not found, downloading from %s...", metadata_link)
+    download_with_progress(metadata_link, meta_path)
+
+    # GTEx metadata is multi-column TSV, not just 2-column key/value
+    meta = pd.read_csv(meta_path, sep="\t", encoding="latin1")
+
+    # Use GTEx sample IDs as index (usually "SAMPID")
+    if "SAMPID" in meta.columns:
+        meta = meta.set_index("SAMPID")
+
+    # Align samples in expression with metadata
+    obs = meta.loc[expr.index].copy()
+
+    adata = ad.AnnData(
+        X=expr.values,
+        obs=obs,
+        var=pd.DataFrame(
+            {"ensembl_id": gene_ids, "gene_symbol": gene_symbols}, index=gene_ids
+        ),
+    )
+
+    if "SMTSD" in obs.columns:
+        adata.obs["tissue"] = obs["SMTSD"]
+
+    return adata
 
 
 def read_raw_h5ad(dataset: DatasetInterface) -> ad.AnnData:
@@ -172,15 +230,11 @@ def read_raw_h5ad(dataset: DatasetInterface) -> ad.AnnData:
     raw_path = os.path.join(dataset_dir, f"{short_name}_raw.h5ad")
 
     if not os.path.exists(raw_path):
-        print(f"[INFO] Raw file not found, downloading from {download_link}...")
-        response = requests.get(download_link, stream=True)
-        response.raise_for_status()
-        with open(raw_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        print(f"[INFO] Saved raw data to {raw_path}")
+        logger.info(f"[INFO] Raw file not found, downloading from {download_link}...")
+        download_with_progress(download_link, raw_path)
+        logger.info(f"[INFO] Saved raw data to {raw_path}")
 
-    print(f"[INFO] Reading AnnData from {raw_path}")
+    logger.info(f"[INFO] Reading AnnData from {raw_path}")
     return ad.read_h5ad(raw_path)
 
 
