@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name="z-zytome",
-    version="0.0.3",
+    version="0.0.4",
     description="Zytome is declarative library for handling gene expression data for various data portals or datasets.",
     url="https://github.com/mzguntalan/zytome",
     author="Marko Zolo Gozano Untalan",
