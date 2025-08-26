@@ -14,7 +14,60 @@ class Dataset(GTExBulkInterface):
     @property
     def tissues(self) -> list[str]:
         return [
-            "",
+            "Whole Blood",
+            "Brain - Frontal Cortex (BA9)",
+            "Brain - Cerebellar Hemisphere",
+            "Brain - Substantia nigra",
+            "Brain - Anterior cingulate cortex (BA24)",
+            "Brain - Amygdala",
+            "Brain - Caudate (basal ganglia)",
+            "Brain - Nucleus accumbens (basal ganglia)",
+            "Brain - Putamen (basal ganglia)",
+            "Adipose - Subcutaneous",
+            "Muscle - Skeletal",
+            "Artery - Tibial",
+            "Artery - Coronary",
+            "Heart - Atrial Appendage",
+            "Thyroid",
+            "Kidney - Cortex",
+            "Uterus",
+            "Vagina",
+            "Breast - Mammary Tissue",
+            "Skin - Not Sun Exposed (Suprapubic)",
+            "Minor Salivary Gland",
+            "Brain - Cortex",
+            "Cells - EBV-transformed lymphocytes",
+            "Adrenal Gland",
+            "Lung",
+            "Spleen",
+            "Pancreas",
+            "Esophagus - Muscularis",
+            "Esophagus - Mucosa",
+            "Esophagus - Gastroesophageal Junction",
+            "Stomach",
+            "Adipose - Visceral (Omentum)",
+            "Colon - Sigmoid",
+            "Small Intestine - Terminal Ileum",
+            "Colon - Transverse",
+            "Prostate",
+            "Testis",
+            "Skin - Sun Exposed (Lower leg)",
+            "Nerve - Tibial",
+            "Brain - Hypothalamus",
+            "Heart - Left Ventricle",
+            "Liver",
+            "Brain - Cerebellum",
+            "Cells - Cultured fibroblasts",
+            "Brain - Spinal cord (cervical c-1)",
+            "Artery - Aorta",
+            "Pituitary",
+            "Brain - Hippocampus",
+            "Ovary",
+            "Kidney - Medulla",
+            "Bladder",
+            "Cervix - Ectocervix",
+            "Cervix - Endocervix",
+            "Fallopian Tube",
         ]
 
     @property
@@ -31,7 +84,7 @@ class Dataset(GTExBulkInterface):
 
     @property
     def num_cells(self) -> int:
-        return 0
+        return 19_616
 
     @property
     def download_link(self) -> str:
