@@ -187,7 +187,11 @@ def read_gct_gz(dataset: GTExBulkInterface) -> ad.AnnData:
         X=expr.values,
         obs=obs,
         var=pd.DataFrame(
-            {"ensembl_id": gene_ids, "gene_symbol": gene_symbols},
+            {
+                "ensembl_id": gene_ids,
+                "gene_symbol": gene_symbols,
+                "feature_name": gene_ids,
+            },
             index=gene_ids,
         ),
     )
