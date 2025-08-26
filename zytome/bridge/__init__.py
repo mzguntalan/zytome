@@ -2,7 +2,8 @@
 
 import anndata as ad
 import numpy as np
-from explorer import Dataset
+
+from zytome.explorer import Dataset
 
 
 def _rearrange_features_to_match_another(
