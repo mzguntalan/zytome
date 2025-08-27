@@ -6,6 +6,7 @@ from typing import Union
 
 import anndata as ad
 import numpy as np
+import pandas as pd
 from scipy import sparse
 
 from zytome.explorer import Dataset
@@ -13,7 +14,8 @@ from zytome.explorer import Dataset
 
 def _rearrange_features_to_match_another_adata(
     S: ad.AnnData,
-    T_column_names: Sequence[str],
+    T: ad.AnnData,
+    # T_column_names: Sequence[str],
     pad_missing: bool = True,  # if True, return full [n, t] with zeros for missing
 ) -> Tuple[Union[ad.AnnData, ad.AnnData], np.ndarray]:
     """
@@ -26,6 +28,7 @@ def _rearrange_features_to_match_another_adata(
         ordered like T_column_names[marks].
       - marks: boolean array of length len(T_column_names); True if feature existed in S.
     """
+    T_column_names = T.var_names
     T_vars = np.asarray(T_column_names)
     idx_in_S = S.var_names.get_indexer(T_vars)  # -1 where missing
     marks = idx_in_S >= 0
@@ -54,7 +57,14 @@ def _rearrange_features_to_match_another_adata(
     S_rearr = ad.AnnData(
         X_out,
         obs=S.obs.copy(),
-        var=None,
+        var=pd.DataFrame(
+            {
+                "ensembl_id": T_vars,
+                "feature_name": T.var["feature_name"],
+                "feature_length": T.var["feature_length"],
+            },
+            index=T_vars,
+        ),
         dtype=S.X.dtype,
     )
     S_rearr.obs_names = S.obs_names.copy()
@@ -71,6 +81,6 @@ def rearrange_features_to_match_another(
     """
 
     new_adata, marks = _rearrange_features_to_match_another_adata(
-        source_dataset.adata, reference_dataset.feature_names
+        source_dataset.adata, reference_dataset.adata
     )
     return Dataset(new_adata, source_dataset, []), marks
