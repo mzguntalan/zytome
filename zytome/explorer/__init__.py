@@ -9,6 +9,7 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 import requests
+from scipy import sparse as sp
 
 from zytome.explorer.download import download_with_progress
 from zytome.portal._interfaces.dataset import DatasetInterface
@@ -83,7 +84,13 @@ class Dataset(DatasetInterface):
 
     @property
     def raw(self) -> np.ndarray:
-        return self.adata.X.toarray()
+        X = self.adata.X
+        if sp.issparse(X):
+            return X.toarray()
+        elif isinstance(X, np.ndarray):
+            return X
+        else:
+            raise TypeError(f"type of X {type(X)} is unsupported.")
 
     @property
     def raw_normalized_by_feature_length(self) -> np.ndarray:
