@@ -1,0 +1,45 @@
+from zytome.portal._interfaces.dataset import DatasetInterface as Api
+from zytome.portal._interfaces.dataset import Handler
+
+
+class Dataset(Api):
+    @property
+    def short_name(self) -> str:
+        return "tabula_sapiens_ear"
+
+    @property
+    def long_name(self) -> str:
+        return f"cellxgene.tabula_sapiens.{self.short_name}"
+
+    @property
+    def tissues(self) -> list[str]:
+        return [
+            "crista ampullaris",
+            "utricle of membranous labyrinth",
+        ]
+
+    @property
+    def diseases(self) -> list[str]:
+        return ["normal"]
+
+    @property
+    def assays(self) -> list[str]:
+        return [
+            "10x 3' v3",
+        ]
+
+    @property
+    def organism(self) -> str:
+        return "Homo sapiens"
+
+    @property
+    def num_cells(self) -> int:
+        return 3_055
+
+    @property
+    def download_link(self) -> str:
+        return "https://datasets.cellxgene.cziscience.com/7fdb8e36-0e0e-4bbd-93f9-4e9cdf231144.h5ad"
+
+    @property
+    def handler(self) -> Handler:
+        return "CellXGene"
