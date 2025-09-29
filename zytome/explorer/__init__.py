@@ -84,7 +84,7 @@ class Dataset(DatasetInterface):
 
     @property
     def raw(self) -> np.ndarray:
-        X = self.adata.X
+        X = self.adata.raw.X
         if sp.issparse(X):
             return X.toarray()
         elif isinstance(X, np.ndarray):
@@ -92,9 +92,38 @@ class Dataset(DatasetInterface):
         else:
             raise TypeError(f"type of X {type(X)} is unsupported.")
 
+    def to_tpm(self) -> "Dataset":
+        new_adata = self.adata
+        normalized_X = self.raw_normalized_by_feature_length
+
+        if sp.issparse(normalized_X):
+            row_sums = np.array(normalized_X.sum(axis=1)).ravel()
+            row_sums[row_sums == 0] = 1.0  # avoids div by 0
+            inv_row_sums = 1.0 / row_sums
+
+            D_inv = sp.diags(inv_row_sums)
+            sum_normalized_X = D_inv.dot(normalized_X)
+        else:
+            row_sums = normalized_X.sum(axis=-1, keepdims=True)
+            row_sums[row_sums == 0] = 1.0
+            sum_normalized_X = normalized_X / row_sums
+
+        new_adata.X = sum_normalized_X * 1_000_000
+        return Dataset(new_adata, self._dataset, [])
+
     @property
     def raw_normalized_by_feature_length(self) -> np.ndarray:
         return self.raw / self.feature_lengths[None, :]
+
+    @property
+    def values(self) -> np.ndarray:
+        X = self.adata.X
+        if sp.issparse(X):
+            return X.toarray()
+        elif isinstance(X, np.ndarray):
+            return X
+        else:
+            raise TypeError(f"type of X {type(X)} is unsupported.")
 
     @property
     def feature_lengths(self):
@@ -253,6 +282,8 @@ def read_gct_gz(dataset: GTExBulkInterface) -> ad.AnnData:
 
     adata.var["feature_type"] = gtf_df["feature_type"].reindex(adata.var.index)
     adata.var["feature_length"] = gtf_df["feature_length"].reindex(adata.var.index)
+
+    adata.raw = adata
 
     return adata
 
