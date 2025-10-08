@@ -93,14 +93,49 @@ class Dataset(DatasetInterface):
             raise TypeError(f"type of X {type(X)} is unsupported.")
 
     def to_tpm(self) -> "Dataset":
-        new_adata = self.adata
+        """
+        Normalize raw counts to TPM (transcripts per million) using feature-length-normalized raw data.
+        Returns a new Dataset without mutating the original.
+        Raises ValueError if resulting TPM contains NaNs or Infs.
+        """
+        new_adata = self.adata.copy()
         normalized_X = self.raw_normalized_by_feature_length
+        raw_X = self.values  # raw counts
 
+        # --- helper for nan/inf detection ---
+        def has_nan_inf(mat):
+            if sp.issparse(mat):
+                data = mat.data
+                return np.isnan(data).any(), np.isinf(data).any()
+            else:
+                return np.isnan(mat).any(), np.isinf(mat).any()
+
+        # --- check normalized_X first ---
+        norm_has_nan, norm_has_inf = has_nan_inf(normalized_X)
+        if norm_has_nan or norm_has_inf:
+            # backtrack to raw counts
+            raw_has_nan, raw_has_inf = has_nan_inf(raw_X)
+            if raw_has_nan or raw_has_inf:
+                msg = (
+                    "Feature-length-normalized values contain NaN/Inf.\n"
+                    "Backtracking shows raw counts (self.X) also contain "
+                    f"{'NaN ' if raw_has_nan else ''}{'Inf' if raw_has_inf else ''}.\n"
+                    "Please fix raw input before normalization."
+                )
+            else:
+                msg = (
+                    "Feature-length-normalized values contain NaN/Inf.\n"
+                    "Raw counts (self.X) look clean, so the issue was introduced "
+                    "during feature-length normalization."
+                )
+            logger.error(msg)
+            raise ValueError(msg)
+
+        # --- normalization to TPM ---
         if sp.issparse(normalized_X):
             row_sums = np.array(normalized_X.sum(axis=1)).ravel()
-            row_sums[row_sums == 0] = 1.0  # avoids div by 0
+            row_sums[row_sums == 0] = 1.0
             inv_row_sums = 1.0 / row_sums
-
             D_inv = sp.diags(inv_row_sums)
             sum_normalized_X = D_inv.dot(normalized_X)
         else:
@@ -108,12 +143,34 @@ class Dataset(DatasetInterface):
             row_sums[row_sums == 0] = 1.0
             sum_normalized_X = normalized_X / row_sums
 
-        new_adata.X = sum_normalized_X * 1_000_000
+        tpm_X = sum_normalized_X * 1_000_000
+
+        # --- final NaN check ---
+        tpm_has_nan, tpm_has_inf = has_nan_inf(tpm_X)
+        if tpm_has_nan or tpm_has_inf:
+            msg = (
+                "TPM normalization resulted in NaN/Inf values, "
+                "even though input matrices were clean. "
+                "This suggests division/scaling instability."
+            )
+            logger.error(msg)
+            raise ValueError(msg)
+
+        new_adata.X = tpm_X
         return Dataset(new_adata, self._dataset, [])
 
     @property
-    def raw_normalized_by_feature_length(self) -> np.ndarray:
-        return self.raw / self.feature_lengths[None, :]
+    def raw_normalized_by_feature_length(self):
+        fl = self.feature_lengths  # shape (num_features,)
+
+        # Replace zeros and NaNs with 1.0 to avoid division issues
+        safe_fl = np.where(np.isnan(fl) | (fl == 0), 1.0, fl)
+
+        if sp.issparse(self.raw):
+            inv_fl = 1.0 / safe_fl
+            return self.raw.multiply(inv_fl)
+        else:
+            return self.raw / safe_fl[None, :]
 
     @property
     def values(self) -> np.ndarray:
@@ -285,6 +342,27 @@ def read_gct_gz(dataset: GTExBulkInterface) -> ad.AnnData:
 
     adata.raw = adata
 
+    X = adata.X
+    if sp.issparse(X):
+        data = X.data
+        has_nan_or_inf = np.isnan(data).any() or np.isinf(data).any()
+        if has_nan_or_inf:
+            logger.warning(
+                "GCT read contains NaN or Inf values in adata.X (sparse). "
+                "These values have been converted to 0 to ensure safe normalization."
+            )
+            data[np.isnan(data)] = 0.0
+            data[np.isinf(data)] = 0.0
+    else:
+        has_nan_or_inf = np.isnan(X).any() or np.isinf(X).any()
+        if has_nan_or_inf:
+            logger.warning(
+                "GCT read contains NaN or Inf values in adata.X (dense). "
+                "These values have been converted to 0 to ensure safe normalization."
+            )
+            adata.X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+
+    logger.info(f"{dataset.short_name} is loaded without any defects")
     return adata
 
 
