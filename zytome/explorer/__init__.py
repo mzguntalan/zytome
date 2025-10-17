@@ -73,6 +73,10 @@ class Dataset(DatasetInterface):
         self._apply_filters()
         return self._adata
 
+    @property
+    def cell_types(self) -> list[str]:
+        return list(self.adata.obs["cell_types"].unique())
+
     def _apply_filters(self):
         adata = self._adata
 
@@ -202,6 +206,91 @@ class Dataset(DatasetInterface):
     def filter(self, filter_fn: Filter) -> "Dataset":
         return Dataset(self._adata, self._dataset, self._filters + [filter_fn])
 
+    def arrange_by_chromosome(
+        self, put_genes_with_unknown_chromosome_at_the_end: bool = False
+    ) -> tuple["Dataset", list[int]]:
+        """
+        Arrange genes by chromosome order (chr1-22, chrX, chrY, chrMT) and genomic position.
+        Currently only supports GTEx datasets.
+
+        Genes without chromosome annotations are discarded by default.
+
+        Parameters
+        ----------
+        put_genes_with_unknown_chromosome_at_the_end : bool, default False
+            If True, raises NotImplementedError (reserved for future use).
+            If False, discards genes without valid chromosome annotations.
+
+        Returns
+        -------
+        tuple[Dataset, list[int]]
+            - Dataset with genes arranged by chromosome and position
+            - List of 25 integers: gene counts per chromosome (chr1-22, X, Y, MT)
+              Returns 0 for chromosomes with no genes present.
+
+        Raises
+        ------
+        NotImplementedError
+            If put_genes_with_unknown_chromosome_at_the_end is True.
+        ValueError
+            If dataset is not from GTEx handler.
+
+        Examples
+        --------
+        >>> dx_sorted, counts = dx.arrange_by_chromosome()
+        >>> print(counts)  # [1523, 1189, ..., 45, 37, 13]  # genes per chr1-22, X, Y, MT
+        """
+        if self.handler != "GTEx":
+            raise ValueError(
+                f"arrange_by_chromosome currently only supports GTEx datasets. "
+                f"Got handler: {self.handler}"
+            )
+
+        if put_genes_with_unknown_chromosome_at_the_end:
+            raise NotImplementedError(
+                "put_genes_with_unknown_chromosome_at_the_end=True is not yet implemented"
+            )
+
+        self._apply_filters()
+
+        # Define standard chromosome order
+        STANDARD_CHR_ORDER = [f"chr{i}" for i in range(1, 23)] + [
+            "chrX",
+            "chrY",
+            "chrMT",
+        ]
+
+        if "chromosome" not in self._adata.var.columns:
+            raise ValueError(
+                "Chromosome information not found in adata.var. "
+                "This should have been added during GTEx data loading."
+            )
+
+        valid_chr_mask = self._adata.var["chromosome"].isin(STANDARD_CHR_ORDER)
+
+        if not valid_chr_mask.all():
+            logger.info("Discarding genes without valid chromosome annotations")
+
+        filtered_adata = self._adata[:, valid_chr_mask].copy()
+
+        chr_indices = filtered_adata.var["chromosome"].map(
+            {chr_name: idx for idx, chr_name in enumerate(STANDARD_CHR_ORDER)}
+        )
+        start_positions = filtered_adata.var["start_position"].fillna(0).astype(int)
+
+        sort_order = np.lexsort((start_positions, chr_indices))
+
+        sorted_adata = filtered_adata[:, sort_order].copy()
+
+        chr_counts = [
+            int((sorted_adata.var["chromosome"] == chr_name).sum())
+            for chr_name in STANDARD_CHR_ORDER
+        ]
+
+        new_dataset = Dataset(sorted_adata, self._dataset, [])
+
+        return new_dataset, chr_counts
+
 
 def load_data_from_portal(dataset: DatasetInterface):
     if dataset.handler == "CellXGene":
@@ -214,9 +303,11 @@ def load_data_from_portal(dataset: DatasetInterface):
 
 
 def make_filter(
+    *,
     assays: Optional[List[str]] = None,
     tissues: Optional[List[str]] = None,
     feature_types: Optional[List[str]] = None,
+    diseases: Optional[List[str]] = None,
     max_cells: Optional[int] = None,
     rng: Optional[np.random.Generator] = None,
 ):
@@ -226,6 +317,7 @@ def make_filter(
         assays=assays,
         tissues=tissues,
         feature_types=feature_types,
+        diseases=diseases,
         max_cells=max_cells,
         rng=rng,
     )
@@ -324,6 +416,8 @@ def read_gct_gz(dataset: GTExBulkInterface) -> ad.AnnData:
                     "ensembl_id": attrs["gene_id"].split(".")[0],
                     "feature_type": attrs.get("gene_type"),
                     "feature_length": end - start + 1,
+                    "chromosome": chrom,
+                    "start_position": start,
                 }
             )
     gtf_df = pd.DataFrame(gene_info).set_index("ensembl_id")
@@ -334,11 +428,18 @@ def read_gct_gz(dataset: GTExBulkInterface) -> ad.AnnData:
     gtf_df.index = gtf_df.index.str.replace(r"\..", "", regex=True)
 
     gtf_df = gtf_df.groupby(gtf_df.index).agg(
-        {"feature_type": "first", "feature_length": "first"}
+        {
+            "feature_type": "first",
+            "feature_length": "first",
+            "chromosome": "first",
+            "start_position": "first",
+        }
     )
 
     adata.var["feature_type"] = gtf_df["feature_type"].reindex(adata.var.index)
     adata.var["feature_length"] = gtf_df["feature_length"].reindex(adata.var.index)
+    adata.var["chromosome"] = gtf_df["chromosome"].reindex(adata.var.index)
+    adata.var["start_position"] = gtf_df["start_position"].reindex(adata.var.index)
 
     adata.raw = adata
 
@@ -410,7 +511,9 @@ def filter_adata(
     *,
     assays: Optional[List[str]] = None,
     tissues: Optional[List[str]] = None,
+    cell_types: Optional[List[str]] = None,
     feature_types: Optional[List[str]] = None,
+    diseases: Optional[List[str]] = None,
     max_cells: Optional[int] = None,
     rng: Optional[np.random.Generator] = None,
 ) -> ad.AnnData:
@@ -447,8 +550,12 @@ def filter_adata(
         mask_cells &= adata.obs["assay"].isin(assays)
     if tissues:
         mask_cells &= adata.obs["tissue"].isin(tissues)
+    if diseases:
+        mask_cells &= adata.obs["disease"].isin(diseases)
     if feature_types:
         mask_genes &= adata.var["feature_type"].isin(feature_types)
+    if cell_types:
+        mask_genes &= adata.var["cell_type"].isin(cell_types)
 
     adata_filtered = adata[mask_cells, mask_genes]
 
