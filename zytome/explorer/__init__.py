@@ -75,7 +75,7 @@ class Dataset(DatasetInterface):
 
     @property
     def cell_types(self) -> list[str]:
-        return list(self.adata.obs["cell_types"].unique())
+        return list(self.adata.obs["cell_type"].unique())
 
     def _apply_filters(self):
         adata = self._adata
@@ -95,6 +95,59 @@ class Dataset(DatasetInterface):
             return X
         else:
             raise TypeError(f"type of X {type(X)} is unsupported.")
+
+    def to_cpm(self) -> "Dataset":
+        """
+        Normalize raw counts to CPM (counts per million).
+        Returns a new Dataset without mutating the original.
+        Raises ValueError if resulting CPM contains NaNs or Infs.
+        """
+        new_adata = self.adata.copy()
+        raw_X = self.values  # raw counts
+
+        # --- helper for nan/inf detection ---
+        def has_nan_inf(mat):
+            if sp.issparse(mat):
+                data = mat.data
+                return np.isnan(data).any(), np.isinf(data).any()
+            else:
+                return np.isnan(mat).any(), np.isinf(mat).any()
+
+        # --- check normalized_X first ---
+        raw_has_nan, raw_has_inf = has_nan_inf(raw_X)
+        if raw_has_nan or raw_has_inf:
+            if raw_has_nan or raw_has_inf:
+                msg = "raw values contain NaN/Inf.\n"
+                logger.error(msg)
+                raise ValueError(msg)
+
+        # --- normalization to TPM ---
+        if sp.issparse(raw_X):
+            row_sums = np.array(raw_X.sum(axis=1)).ravel()
+            row_sums[row_sums == 0] = 1.0
+            inv_row_sums = 1.0 / row_sums
+            D_inv = sp.diags(inv_row_sums)
+            sum_normalized_X = D_inv.dot(normalized_X)
+        else:
+            row_sums = raw_X.sum(axis=-1, keepdims=True)
+            row_sums[row_sums == 0] = 1.0
+            sum_normalized_X = raw_X / row_sums
+
+        cpm_X = sum_normalized_X * 1_000_000
+
+        # --- final NaN check ---
+        tpm_has_nan, tpm_has_inf = has_nan_inf(cpm_X)
+        if tpm_has_nan or tpm_has_inf:
+            msg = (
+                "CPM normalization resulted in NaN/Inf values, "
+                "even though input matrices were clean. "
+                "This suggests division/scaling instability."
+            )
+            logger.error(msg)
+            raise ValueError(msg)
+
+        new_adata.X = cpm_X
+        return Dataset(new_adata, self._dataset, [])
 
     def to_tpm(self) -> "Dataset":
         """
@@ -557,7 +610,7 @@ def filter_adata(
     if feature_types:
         mask_genes &= adata.var["feature_type"].isin(feature_types)
     if cell_types:
-        mask_genes &= adata.var["cell_type"].isin(cell_types)
+        mask_cells &= adata.obs["cell_type"].isin(cell_types)
 
     adata_filtered = adata[mask_cells, mask_genes]
 
