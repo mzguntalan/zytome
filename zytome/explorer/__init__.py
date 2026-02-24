@@ -348,7 +348,11 @@ class Dataset(DatasetInterface):
 def load_data_from_portal(dataset: DatasetInterface):
     if dataset.handler == "CellXGene":
         adata = read_raw_h5ad(dataset)
-        adata.X = adata.raw.X  # converts X back to the raw
+
+        if adata.raw is not None:
+            # sometimes it exists, sometimes not
+            adata.X = adata.raw.X
+
         return Dataset(adata, dataset, [])
     elif dataset.handler == "GTEx":
         adata = read_gct_gz(dataset)
