@@ -19,7 +19,7 @@ class Dataset(Api):
 
     @property
     def diseases(self) -> list[str]:
-        return ["normal"]
+        return ["normal", "cytomegalovirus infection"]
 
     @property
     def assays(self) -> list[str]:
