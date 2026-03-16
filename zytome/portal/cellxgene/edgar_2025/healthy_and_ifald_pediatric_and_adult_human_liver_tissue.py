@@ -14,28 +14,27 @@ class Dataset(Api):
     @property
     def tissues(self) -> list[str]:
         return [
-                "caudate lobe of liver",
-                "left lobe of liver",
-                "liver",
-                "right lobe of liver",
-                
+            "caudate lobe of liver",
+            "left lobe of liver",
+            "liver",
+            "right lobe of liver",
         ]
 
     @property
     def diseases(self) -> list[str]:
         return [
-                "intestinal failure–associated",
-                "liver disease",
-                "normal",
+            "intestinal failure–associated",
+            "liver disease",
+            "normal",
         ]
 
     @property
     def assays(self) -> list[str]:
         return [
-                "10x 3' v2",
-                "10x 3' v3",
-                "10x 5' v1",
-                "10x 5' v2",
+            "10x 3' v2",
+            "10x 3' v3",
+            "10x 5' v1",
+            "10x 5' v2",
         ]
 
     @property
@@ -44,7 +43,7 @@ class Dataset(Api):
 
     @property
     def num_cells(self) -> int:
-        return 81_001 
+        return 81_001
 
     @property
     def download_link(self) -> str:

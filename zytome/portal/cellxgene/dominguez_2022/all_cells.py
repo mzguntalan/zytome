@@ -31,7 +31,7 @@ class Dataset(Api):
             "thoracic lymph node",
             "thymus",
             "transverse colon",
-           ]
+        ]
 
     @property
     def diseases(self) -> list[str]:
@@ -40,9 +40,9 @@ class Dataset(Api):
     @property
     def assays(self) -> list[str]:
         return [
-                "10x 3' v3",
-                "10x 5' v1",
-                "10x 5' v2",
+            "10x 3' v3",
+            "10x 5' v1",
+            "10x 5' v2",
         ]
 
     @property
@@ -51,7 +51,7 @@ class Dataset(Api):
 
     @property
     def num_cells(self) -> int:
-        return 329_762 
+        return 329_762
 
     @property
     def download_link(self) -> str:

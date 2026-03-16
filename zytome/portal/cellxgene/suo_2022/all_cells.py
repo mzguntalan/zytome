@@ -23,7 +23,7 @@ class Dataset(Api):
             "spleen",
             "thymus",
             "yolk sac",
-           ]
+        ]
 
     @property
     def diseases(self) -> list[str]:
@@ -42,7 +42,7 @@ class Dataset(Api):
 
     @property
     def num_cells(self) -> int:
-        return 908_046 
+        return 908_046
 
     @property
     def download_link(self) -> str:

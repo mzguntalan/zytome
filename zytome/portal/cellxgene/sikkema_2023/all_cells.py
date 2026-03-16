@@ -39,7 +39,7 @@ class Dataset(Api):
             "pulmonary fibrosis",
             "pulmonary sarcoidosis",
             "squamous cell lung carcinoma",
-            ]
+        ]
 
     @property
     def assays(self) -> list[str]:
@@ -60,7 +60,7 @@ class Dataset(Api):
 
     @property
     def num_cells(self) -> int:
-        return 2_282_447 
+        return 2_282_447
 
     @property
     def download_link(self) -> str:

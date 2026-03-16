@@ -50,7 +50,7 @@ class Dataset(Api):
             "stomach",
             "transverse colon",
             "vermiform appendix",
-                ]
+        ]
 
     @property
     def diseases(self) -> list[str]:
@@ -61,7 +61,7 @@ class Dataset(Api):
             "gastric cancer",
             "inflammatory bowel disease",
             "ulcerative colitis",
-                ]
+        ]
 
     @property
     def assays(self) -> list[str]:
@@ -80,7 +80,7 @@ class Dataset(Api):
 
     @property
     def num_cells(self) -> int:
-        return 1_358_573 
+        return 1_358_573
 
     @property
     def download_link(self) -> str:

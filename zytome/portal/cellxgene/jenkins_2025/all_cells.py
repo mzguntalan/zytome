@@ -14,16 +14,16 @@ class Dataset(Api):
     @property
     def tissues(self) -> list[str]:
         return [
-                "oropharynx",
-                ]
+            "oropharynx",
+        ]
 
     @property
     def diseases(self) -> list[str]:
         return [
-                "normal",
-                "oropharynx squamous cell",
-                "carcinoma",
-                ]
+            "normal",
+            "oropharynx squamous cell",
+            "carcinoma",
+        ]
 
     @property
     def assays(self) -> list[str]:
@@ -37,7 +37,7 @@ class Dataset(Api):
 
     @property
     def num_cells(self) -> int:
-        return 82_844 
+        return 82_844
 
     @property
     def download_link(self) -> str:
