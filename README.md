@@ -1,6 +1,6 @@
 # zytome
 
-![Version 0.0.68](https://img.shields.io/badge/version-0.0.68-lightblue)
+![Version 0.0.70](https://img.shields.io/badge/version-0.0.70-lightblue)
 
 Zytome is work-in-progress / work-as-i-go library for conveniently downloading data from several sources, filtering, modifying, and manipulating gene expression datasets. This library will grow as I continue to work with gene expression data and will contain essential functionality that are used frequently.
 
